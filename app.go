@@ -9,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"elevator/db"
+	"elevator/ws"
 )
 
 func hello(w http.ResponseWriter, req *http.Request) {
@@ -31,6 +32,8 @@ func main() {
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)
+
+	go ws.StartWebSocketServer()
 
 	port := 8090
 

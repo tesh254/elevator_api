@@ -104,3 +104,38 @@ func (p *Queries) UpdateById(table string, id int, jsonData []byte) (interface{}
 	// Fetch and return the updated record
 	return p.GetById(table, id)
 }
+
+func (p *Queries) Insert(table string, data map[string]interface{}, resultStruct interface{}) (interface{}, error) {
+	keys := make([]string, 0, len(data))
+	values := make([]interface{}, 0, len(data))
+
+	for key, value := range data {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+
+	columns := strings.Join(keys, ", ")
+	placeholders := make([]string, len(keys))
+	for i := range placeholders {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	valuesQuery := strings.Join(placeholders, ", ")
+
+	insertQuery := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) RETURNING *", table, columns, valuesQuery)
+
+	structType := reflect.TypeOf(resultStruct)
+
+	resultInstance := reflect.New(structType).Interface()
+
+	columnsToScan := make([]interface{}, structType.NumField())
+	for i := 0; i < structType.NumField(); i++ {
+		columnsToScan[i] = reflect.ValueOf(resultInstance).Elem().Field(i).Addr().Interface()
+	}
+
+	err := p.database.QueryRow(insertQuery, values...).Scan(columnsToScan...)
+	if err != nil {
+		return nil, err
+	}
+
+	return resultInstance, nil
+}
