@@ -9,6 +9,24 @@ import (
 	_ "github.com/lib/pq"
 )
 
+func DropTables(db *sql.DB) {
+	dropQueries := []string{
+		"drop table logs;",
+		"drop table elevators;",
+		"drop table buildings;",
+	}
+
+	for _, query := range dropQueries {
+		_, err := db.Exec(query)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println("✅ Table dropped")
+	}
+}
+
 func SeedTable(db *sql.DB) {
 	buildingSeedSql := `
 		INSERT INTO buildings (no_of_floors, name)
@@ -16,7 +34,6 @@ func SeedTable(db *sql.DB) {
 			(10, 'Office Building');
 	`
 
-	// Seed data for elevators table
 	elevatorSeedSql := `
 		INSERT INTO elevators (building_id, floor, direction, moving, is_door_open)
 		VALUES
@@ -67,7 +84,7 @@ func createTables(db *sql.DB) {
 			id SERIAL PRIMARY KEY,
 			elevator_id INT REFERENCES elevators (id),
 			current_floor INT NOT NULL,
-			state VARCHAR(10) NOT NULL CHECK (state IN ('door-open', 'door-closed', 'moving', 'stopped')),
+			state VARCHAR(255) NOT NULL CHECK (state IN ('door-open', 'door-closed', 'moving', 'stopped')),
 			direction VARCHAR(10) NOT NULL CHECK (direction IN ('none', 'up', 'down')),
 			timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP 
 		);
@@ -78,11 +95,17 @@ func createTables(db *sql.DB) {
 		ADD COLUMN IF NOT EXISTS query TEXT NOT NULL;
 	`
 
+	alterElevatorTable := `
+		ALTER TABLE elevators
+		ALTER COLUMN updated_at SET DEFAULT NULL;
+	`
+
 	tableQueries := []string{
 		createBuildingTableSql,
 		createElevatorTableSql,
 		createLogTableSql,
 		alterLogTableSql,
+		alterElevatorTable,
 	}
 
 	for _, query := range tableQueries {
@@ -91,12 +114,10 @@ func createTables(db *sql.DB) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		fmt.Println("✅ :::Tables created successfully:::")
 	}
 }
 
-func ConnectToDatabase() *sql.DB {
+func ConnectToDatabase(shouldInitTables bool) *sql.DB {
 	var db *sql.DB
 
 	connectionString := os.Getenv("DB_URL")
@@ -112,7 +133,9 @@ func ConnectToDatabase() *sql.DB {
 		log.Fatal(err)
 	}
 	fmt.Println("✅ :::Connected to the database:::")
-	createTables(db)
+	if shouldInitTables {
+		createTables(db)
+	}
 
 	return db
 }
