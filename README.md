@@ -49,6 +49,8 @@ The Elevator API has the following endpoints:
    
 3. **`/ws`**: Connect to the WebSocket server for updates.
 
+https://github.com/tesh254/elevator_api/assets/31078302/80eb019a-3af3-4763-a1fe-469d05b16e48
+
 
 ## Configuration
 
