@@ -9,17 +9,24 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func seedTable(db *sql.DB) {
-	elevatorSeedSql := `
-		-- Seed data for elevators table
-		INSERT INTO elevators (floor, direction, moving, is_door_open)
+func SeedTable(db *sql.DB) {
+	buildingSeedSql := `
+		INSERT INTO buildings (no_of_floors, name)
 		VALUES
-			(1, 'none', false, false);
+			(10, 'Office Building');
 	`
 
-	var seedQueries [1]string
+	// Seed data for elevators table
+	elevatorSeedSql := `
+		INSERT INTO elevators (building_id, floor, direction, moving, is_door_open)
+		VALUES
+			(1, 1, 'none', false, false);
+	`
 
-	seedQueries[0] = elevatorSeedSql
+	seedQueries := []string{
+		buildingSeedSql,
+		elevatorSeedSql,
+	}
 
 	for _, query := range seedQueries {
 		_, err := db.Exec(query)
@@ -28,14 +35,24 @@ func seedTable(db *sql.DB) {
 			log.Fatal(err)
 		}
 
-		fmt.Println("✅ :::Seed function ran:::")
+		fmt.Println("✅ Seed function ran")
 	}
 }
 
 func createTables(db *sql.DB) {
+	createBuildingTableSql := `
+		CREATE TABLE IF NOT EXISTS buildings (
+			id SERIAL PRIMARY KEY,
+			no_of_floors INT NOT NULL,
+			name VARCHAR(255),
+			created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+		);
+	`
+
 	createElevatorTableSql := `
 		CREATE TABLE IF NOT EXISTS elevators (
 			id SERIAL PRIMARY KEY,
+			building_id INT REFERENCES buildings (id),
 			floor INT NOT NULL,
 			direction VARCHAR(10) NOT NULL CHECK (direction IN ('none', 'up', 'down')),
 			moving BOOLEAN NOT NULL,
@@ -49,19 +66,24 @@ func createTables(db *sql.DB) {
 		CREATE TABLE IF NOT EXISTS logs (
 			id SERIAL PRIMARY KEY,
 			elevator_id INT REFERENCES elevators (id),
-			timestamp TIMESTAMPTZ NOT NULL,
-			method VARCHAR(10) NOT NULL,
-			path VARCHAR(255) NOT NULL,
-			query TEXT,
-			body TEXT,
-			ip_address VARCHAR(45)
+			current_floor INT NOT NULL,
+			state VARCHAR(10) NOT NULL CHECK (state IN ('door-open', 'door-closed', 'moving', 'stopped')),
+			direction VARCHAR(10) NOT NULL CHECK (direction IN ('none', 'up', 'down')),
+			timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP 
 		);
 	`
 
-	var tableQueries [2]string
+	alterLogTableSql := `
+		ALTER TABLE logs
+		ADD COLUMN IF NOT EXISTS query TEXT NOT NULL;
+	`
 
-	tableQueries[0] = createElevatorTableSql
-	tableQueries[1] = createLogTableSql
+	tableQueries := []string{
+		createBuildingTableSql,
+		createElevatorTableSql,
+		createLogTableSql,
+		alterLogTableSql,
+	}
 
 	for _, query := range tableQueries {
 		_, err := db.Exec(query)
@@ -76,7 +98,10 @@ func createTables(db *sql.DB) {
 
 func ConnectToDatabase() *sql.DB {
 	var db *sql.DB
-	db, err := sql.Open("postgres", os.Getenv("DB_URL"))
+
+	connectionString := os.Getenv("DB_URL")
+
+	db, err := sql.Open("postgres", connectionString)
 
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +113,6 @@ func ConnectToDatabase() *sql.DB {
 	}
 	fmt.Println("✅ :::Connected to the database:::")
 	createTables(db)
-	seedTable(db)
 
 	return db
 }

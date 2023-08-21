@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/handlers"
@@ -31,5 +32,16 @@ func main() {
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)
 
-	http.ListenAndServe(":8090", corsHandler((router)))
+	port := 8090
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: corsHandler(router),
+	}
+
+	log.Printf("🏃‍♂️ :::Server is starting on port %d:::\n", port)
+	err := server.ListenAndServe()
+	if err != nil {
+		log.Fatal("Server error: ", err)
+	}
 }
