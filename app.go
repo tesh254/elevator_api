@@ -1,50 +1,93 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/joho/godotenv"
 
+	"elevator/controllers"
 	"elevator/db"
+	"elevator/queries"
 	"elevator/ws"
 )
 
-func hello(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "hello\n")
+func logRequest(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+
+		next(w, req)
+
+		duration := time.Since(start)
+		fmt.Printf("[%s] %s %s %v\n", time.Now().Format("2006-01-02 15:04:05"), req.Method, req.URL.Path, duration)
+	}
 }
 
 func main() {
 	godotenv.Load()
 
-	database := db.ConnectToDatabase()
+	database := db.ConnectToDatabase(true)
 
-	defer database.Close()
+	var genSeed bool
+	var run bool
+	var dropTables bool
 
-	router := http.NewServeMux()
+	flag.BoolVar(&genSeed, "gen-seed", false, "Generate seed data")
+	flag.BoolVar(&run, "run", false, "Run server and WebSocket")
+	flag.BoolVar(&dropTables, "drop-tables", false, "Drop all tables")
 
-	router.HandleFunc("/hello", hello)
+	flag.Parse()
 
-	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}), // You can specify specific origins instead of "*"
-		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
-	)
-
-	go ws.StartWebSocketServer()
-
-	port := 8090
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: corsHandler(router),
+	if dropTables {
+		db.DropTables(database)
+		return
 	}
 
-	log.Printf("🏃‍♂️ :::Server is starting on port %d:::\n", port)
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Fatal("Server error: ", err)
+	if genSeed {
+		db.SeedTable(database)
+		return
+	}
+
+	if run {
+		router := http.NewServeMux()
+
+		var queries queries.Queries
+
+		queries.Database = database
+
+		router.HandleFunc("/call", logRequest(func(w http.ResponseWriter, req *http.Request) {
+			controllers.ElevatorHandler(w, req, queries)
+		}))
+
+		router.HandleFunc("/logs", logRequest(func(w http.ResponseWriter, req *http.Request) {
+			controllers.LogsHandler(w, req, queries)
+		}))
+
+		corsHandler := handlers.CORS(
+			handlers.AllowedOrigins([]string{"*"}),
+			handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+			handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		)
+
+		go ws.StartWebSocketServer()
+
+		port := 8090
+
+		server := &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: corsHandler(router),
+		}
+
+		defer database.Close()
+
+		log.Printf("🏃‍♂️ :::Server is starting on port %d:::\n", port)
+		err := server.ListenAndServe()
+		if err != nil {
+			log.Fatal("Server error: ", err)
+		}
 	}
 }
