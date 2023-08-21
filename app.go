@@ -60,11 +60,19 @@ func main() {
 		queries.Database = database
 
 		router.HandleFunc("/call", logRequest(func(w http.ResponseWriter, req *http.Request) {
-			controllers.ElevatorHandler(w, req, queries)
+			if req.Method == http.MethodPost {
+				controllers.ElevatorHandler(w, req, queries)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		}))
 
 		router.HandleFunc("/logs", logRequest(func(w http.ResponseWriter, req *http.Request) {
-			controllers.LogsHandler(w, req, queries)
+			if req.Method == http.MethodGet {
+				controllers.LogsHandler(w, req, queries)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		}))
 
 		corsHandler := handlers.CORS(
